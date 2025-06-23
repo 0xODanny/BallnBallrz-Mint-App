@@ -28,7 +28,8 @@ export default function Home() {
 
     try {
       const { ethereum } = window;
-      const provider = new ethers.providers.Web3Provider(ethereum);
+      const provider = new ethers.providers.Web3Provider(ethereum, "any");
+      await provider.send("eth_requestAccounts", []); // forces wallet connection if not already
       const signer = provider.getSigner();
       const deployer = process.env.NEXT_PUBLIC_DEPLOYER_WALLET;
 

@@ -190,12 +190,30 @@ const MyBallrz = () => {
 
         <h1
           className="text-3xl font-bold mb-4 !text-white drop-shadow-lg flex items-center gap-2"
-          style={{ color: "#ffffff" }}
+          style={{ color: "#ff4ce1" }}
         >
           <span className="inline-block animate-spin-slow">🏀</span>
           <span>&nbsp;</span>
           My Balln Ballrz
         </h1>
+
+	<div className="flex justify-center">
+  <div
+  className="w-full max-w-[1024px] aspect-[10/1] mx-auto mb-6 flex items-center justify-center rounded-lg shadow-lg text-white text-sm sm:text-base md:text-lg font-semibold text-center px-4"
+  style={{
+    backgroundImage: "url('/nba_banner.png')",
+    backgroundSize: "contain",
+    backgroundRepeat: "no-repeat",
+    backgroundPosition: "center",
+  }}
+>
+  <div className="backdrop-blur-sm bg-black/50 p-2 rounded-md">
+    🎟️ Full team = NBA ticket!<br />
+    🏀 5 NFTs. 🏀 All diff uniforms 🏀 + 1 gold/diamond ball.<br />
+    Some of you have already scored tix.<br /> More rules soon…
+  </div>
+</div>
+</div>
 
         {!isConnected ? (
           <p className="text-white">Connect your wallet to see your Ballrz.</p>
