@@ -1,4 +1,4 @@
-// src/pages/ballrz_staking.tsx
+// src/pages/ballrz-staking.tsx
 import { useEffect, useMemo, useState } from "react";
 import { ConnectWallet, useAddress, useConnectionStatus } from "@thirdweb-dev/react";
 import { ethers } from "ethers";
@@ -17,14 +17,14 @@ const BALLRZ = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS!;
 
 export default function BallrzStaking() {
   const address = useAddress();
-  const conn = useConnectionStatus();
+  const status = useConnectionStatus();
 
-  const [bal, setBal] = useState(0);     // $BALLN token balance
-  const [nfts, setNfts] = useState(0);   // Ballrz NFT balance
+  const [bal, setBal] = useState(0);
+  const [nfts, setNfts] = useState(0);
   const [points, setPoints] = useState(0);
   const [redeeming, setRedeeming] = useState(false);
 
-  // auto-enroll when wallet connects
+  // enroll once
   useEffect(() => {
     if (!address) return;
     fetch("/api/balln/enroll", {
@@ -34,7 +34,7 @@ export default function BallrzStaking() {
     }).catch(() => {});
   }, [address]);
 
-  // fetch live points (poll)
+  // fetch live points
   useEffect(() => {
     if (!address) return;
     let stop = false;
@@ -47,10 +47,13 @@ export default function BallrzStaking() {
     };
     load();
     const t = setInterval(load, 15000);
-    return () => { stop = true; clearInterval(t); };
+    return () => {
+      stop = true;
+      clearInterval(t);
+    };
   }, [address]);
 
-  // read on-chain balances for rate preview
+  // onchain balances → like rpepe sidebar stats
   useEffect(() => {
     if (!address || !RPC) return;
     const provider = new ethers.providers.JsonRpcProvider(RPC);
@@ -71,14 +74,12 @@ export default function BallrzStaking() {
     })();
   }, [address]);
 
+  // calc (same math as rpepe page, different constants)
   const speed = useMemo(() => tokenSpeedFactor(bal), [bal]);
   const boost = useMemo(() => boostFromNfts(nfts), [nfts]);
   const perDay = useMemo(() => dailyPoints(bal, nfts), [bal, nfts]);
+  const daysToRedeem = useMemo(() => (perDay > 0 ? REDEEM_POINTS / perDay : Infinity), [perDay]);
   const pct = Math.min(1, points / REDEEM_POINTS);
-  const daysToRedeem = useMemo(
-    () => (perDay > 0 ? REDEEM_POINTS / perDay : Infinity),
-    [perDay]
-  );
 
   const redeem = async () => {
     if (!address) return;
@@ -104,104 +105,96 @@ export default function BallrzStaking() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-orange-200">
-      {/* top banner with bouncing ball + CRT scanlines */}
-      <div className="relative overflow-hidden h-20 border-b border-orange-700/40 crt-scan">
-        <div className="absolute top-2 animate-ball-bounce">
-          <svg width="64" height="64" viewBox="0 0 64 64" aria-hidden>
+    <div className="min-h-screen bg-black text-orange-400">
+      {/* banner like rpepe, orange theme + bouncing ball + CRT scan */}
+      <div className="relative overflow-hidden h-16 border-b border-orange-700/50 crt-scan">
+        <div className="absolute top-1 animate-ball-bounce">
+          <svg width="56" height="56" viewBox="0 0 64 64" aria-hidden>
             <circle cx="32" cy="32" r="28" fill="#EA580C" stroke="#7C2D12" strokeWidth="4" />
             <path d="M4 32h56M32 4v56M12 12c28 18 28 22 40 40M52 12c-28 18-28 22-40 40"
-                  stroke="#7C2D12" strokeWidth="3" fill="none" />
+              stroke="#7C2D12" strokeWidth="3" fill="none" />
           </svg>
         </div>
       </div>
 
-      <div className="max-w-3xl mx-auto p-6">
-        {/* back to home */}
-        <div className="mb-4">
-          <a href="/" className="inline-block bg-sky-400 text-black font-bold px-3 py-2 rounded-md">
-            ⬅ Back to Home
-          </a>
-        </div>
-
-        <div className="flex items-center justify-between gap-3 mb-4">
-          <h1 className="text-3xl font-bold tracking-widest text-orange-400">BALLRZ STAKING TERMINAL</h1>
+      <div className="max-w-5xl mx-auto px-4 py-6">
+        {/* top row: back + title + wallet chip */}
+        <div className="flex items-center justify-between gap-3">
+          <a href="/" className="text-sky-300 hover:underline">⬅ Back to Home</a>
+          <h1 className="text-3xl md:text-4xl font-extrabold tracking-widest text-orange-500">
+            Welcome to $BALLN Self-Custody Staking!
+          </h1>
           <ConnectWallet />
         </div>
 
-        <p className="text-sm text-orange-300/80 mb-6">
-          Earn points by holding <span className="text-orange-400 font-semibold">$BALLN</span>.
-          Redeem <span className="text-orange-400 font-semibold">{REDEEM_POINTS}</span> points for a Ballrz NFT.
-          +0.5% boost per Ballrz (max +25%). Earnings cap at <span className="font-semibold">{SPEED_CAP_TOKENS}</span> tokens.
+        <p className="mt-4 text-orange-300">
+          Earn an NFT just by holding <span className="text-orange-400 font-semibold">$BALLN</span>!
+          You need <span className="font-bold">{REDEEM_POINTS}</span> points for a Ballrz NFT.
+          Base is <span className="font-bold">{BASE_DAILY_POINTS.toFixed(1)}</span> pts/day at cap ({SPEED_CAP_TOKENS} tokens).
+          +0.5% per Ballrz (max +25%).
         </p>
 
-        {/* live balances + rate preview */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-          <div className="bg-orange-950/30 border border-orange-800/40 rounded-2xl p-4">
-            <div className="text-xs uppercase tracking-widest text-orange-400/80">$BALLN Balance</div>
-            <div className="mt-2 text-xl font-mono">{bal.toFixed(4)}</div>
-            <div className="mt-1 text-sm">Speed: {(speed * 100).toFixed(1)}% (cap {SPEED_CAP_TOKENS})</div>
+        {/* status box like rpepe */}
+        <div className="mt-6 bg-black/70 rounded-lg border border-orange-800/60 p-4 md:p-6">
+          <h2 className="font-mono text-xl md:text-2xl text-orange-400 mb-3">
+            Staking Status {status === "connected" && address ? `for ${address.slice(0,6)}...${address.slice(-4)}` : ""}
+          </h2>
+
+          <div className="space-y-3 font-mono text-[15px]">
+            <Line label="Wallet status:" value={status === "connected" ? "✔ Wallet connected" : "✖ Not connected"} ok={status === "connected"} />
+            <Line label="$BALLN Balance:" value={bal.toFixed(4)} />
+            <Line label="Ballrz NFTs:" value={String(nfts)} />
+            <Line
+              label="Earning:"
+              value={`${perDay.toFixed(2)} points/day  (base capped at ${BASE_DAILY_POINTS.toFixed(1)}/day; +${((boost-1)*100).toFixed(1)}% from NFTs)`}
+            />
+            <Line
+              label="Time until NFT:"
+              value={isFinite(daysToRedeem) ? `${daysToRedeem.toFixed(1)} days` : "—"}
+            />
           </div>
 
-          <div className="bg-orange-950/30 border border-orange-800/40 rounded-2xl p-4">
-            <div className="text-xs uppercase tracking-widest text-orange-400/80">Ballrz NFTs</div>
-            <div className="mt-2 text-xl font-mono">{nfts}</div>
-            <div className="mt-1 text-sm">Boost: {((boost - 1) * 100).toFixed(1)}% (max 25%)</div>
+          {/* progress bar like rpepe */}
+          <div className="mt-4">
+            <div className="h-5 rounded bg-orange-900/40 overflow-hidden border border-orange-800/70">
+              <div
+                className="h-full bg-orange-500"
+                style={{ width: `${pct * 100}%`, transition: "width .5s ease" }}
+              />
+            </div>
+            <div className="text-sm text-orange-300 mt-1 font-mono">
+              Progress toward next NFT — {points.toFixed(2)} / {REDEEM_POINTS}
+            </div>
           </div>
-        </div>
 
-        {/* metrics */}
-        <div className="bg-orange-950/30 border border-orange-800/40 rounded-2xl p-4 mb-8">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-            <Metric label="Base/day @ cap" value={`${BASE_DAILY_POINTS.toFixed(2)} pts`} />
-            <Metric label="Your /day" value={`${perDay.toFixed(2)} pts`} />
-            <Metric label="Days to 3,333" value={isFinite(daysToRedeem) ? `${daysToRedeem.toFixed(1)} d` : "–"} />
-            <Metric label="NFT boost" value={`${((boost - 1) * 100).toFixed(1)}%`} />
+          {/* redeem button */}
+          <div className="mt-4">
+            <button
+              onClick={redeem}
+              disabled={points < REDEEM_POINTS || redeeming || status !== "connected"}
+              className={`px-4 py-2 rounded-md font-bold text-black ${
+                points >= REDEEM_POINTS ? "bg-orange-500 hover:bg-orange-600" : "bg-neutral-600 cursor-not-allowed"
+              }`}
+            >
+              {redeeming ? "Redeeming..." : "Redeem NFT"}
+            </button>
           </div>
-        </div>
 
-        {/* progress (live points from DB) */}
-        <Progress label="Progress to next Ballrz" value={pct} />
-        <div className="text-xs text-orange-300/70 mt-2">
-          {conn === "connected"
-            ? `${points.toFixed(2)} / ${REDEEM_POINTS} pts`
-            : "Connect your wallet to load your progress."}
-        </div>
-
-        {/* redeem */}
-        <div className="mt-6">
-          <button
-            onClick={redeem}
-            disabled={points < REDEEM_POINTS || redeeming || conn !== "connected"}
-            className={`px-4 py-2 rounded-md font-bold text-black ${
-              points >= REDEEM_POINTS ? "bg-orange-500 hover:bg-orange-600" : "bg-neutral-600 cursor-not-allowed"
-            }`}
-          >
-            {redeeming ? "Redeeming..." : "Redeem NFT"}
-          </button>
+          <p className="mt-6 text-xs text-orange-300/80 font-mono">
+            Once registered for staking, removal of $BALLN or Ballrz NFTs from this wallet will reset your earnings.
+            Self-custody staking that allows earning another Ballrz by loyal $BALLN + NFT holders.
+          </p>
         </div>
       </div>
     </div>
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function Line({ label, value, ok }: { label: string; value: string; ok?: boolean }) {
   return (
-    <div className="p-3 rounded-xl bg-black/60 border border-orange-900/40">
-      <div className="text-[10px] uppercase tracking-widest text-orange-400/70">{label}</div>
-      <div className="text-xl font-mono text-orange-200 mt-1">{value}</div>
-    </div>
-  );
-}
-
-function Progress({ label, value }: { label: string; value: number }) {
-  const pct = Math.max(0, Math.min(1, value));
-  return (
-    <div className="bg-black/60 border border-orange-900/40 rounded-2xl p-4">
-      <div className="text-xs text-orange-300/80 mb-2">{label}</div>
-      <div className="h-4 rounded-full bg-orange-950/40 overflow-hidden">
-        <div className="h-full bg-orange-600" style={{ width: `${pct * 100}%` }} />
-      </div>
+    <div>
+      <span className="text-orange-300">{label}</span>{" "}
+      <span className={ok ? "text-green-400" : "text-orange-400"}>{value}</span>
     </div>
   );
 }
