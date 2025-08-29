@@ -29,7 +29,7 @@ export default function Home() {
     try {
       const { ethereum } = window;
       const provider = new ethers.providers.Web3Provider(ethereum, "any");
-      await provider.send("eth_requestAccounts", []); // forces wallet connection if not already
+      await provider.send("eth_requestAccounts", []);
       const signer = provider.getSigner();
       const deployer = process.env.NEXT_PUBLIC_DEPLOYER_WALLET;
 
@@ -89,22 +89,43 @@ export default function Home() {
           <ConnectWallet />
         </div>
 
-        <a
-          href="/my_ballrz"
-          style={{
-            display: "inline-block",
-            marginBottom: "1rem",
-            padding: "0.6rem 1.2rem",
-            backgroundColor: "#ffde59",
-            color: "#000",
-            fontWeight: "bold",
-            borderRadius: "8px",
-            textDecoration: "none",
-            fontSize: "1.1rem",
-          }}
-        >
-          🏀 My Balln Ballrz
-        </a>
+        {/* TOP NAV BUTTONS */}
+        <div style={{ display: "flex", gap: "10px", justifyContent: "center", marginBottom: "1rem" }}>
+          <a
+            href="/my_ballrz"
+            style={{
+              display: "inline-block",
+              padding: "0.6rem 1.2rem",
+              backgroundColor: "#ffde59",
+              color: "#000",
+              fontWeight: "bold",
+              borderRadius: "8px",
+              textDecoration: "none",
+              fontSize: "1.05rem",
+            }}
+          >
+            🏀 My Balln Ballrz
+          </a>
+
+          {/* 🔶 NEW: Go to Staking */}
+          <a
+            href="/ballrz-staking"
+            style={{
+              display: "inline-block",
+              padding: "0.6rem 1.2rem",
+              backgroundColor: "#f97316", // orange
+              color: "#000",
+              fontWeight: "bold",
+              borderRadius: "8px",
+              textDecoration: "none",
+              fontSize: "1.05rem",
+              border: "2px solid #fb923c",
+              boxShadow: "0 0 10px rgba(249,115,22,0.4)",
+            }}
+          >
+            🔶 Staking
+          </a>
+        </div>
 
         <h1 style={{ fontSize: "1.75rem", margin: "1.5rem 0" }}>
           🏀 Mint a Balln Ballrz NFT
@@ -129,22 +150,14 @@ export default function Home() {
             <img
               src="/ballnballrz-preview.png"
               alt="Ballrz NFT"
-              style={{
-                width: "100%",
-                display: "block",
-                borderRadius: "20px",
-              }}
+              style={{ width: "100%", display: "block", borderRadius: "20px" }}
             />
             <div className="css-sparkles">
               {sparkles.map((s, i) => (
                 <div
                   key={i}
                   className="twinkle"
-                  style={{
-                    top: s.top,
-                    left: s.left,
-                    animationDelay: s.delay,
-                  }}
+                  style={{ top: s.top, left: s.left, animationDelay: s.delay }}
                 />
               ))}
             </div>
@@ -159,9 +172,7 @@ export default function Home() {
           <label>Quantity: </label>
           <select onChange={(e) => setQuantity(Number(e.target.value))}>
             {[1, 3, 5, 10].map((q) => (
-              <option key={q} value={q}>
-                {q}
-              </option>
+              <option key={q} value={q}>{q}</option>
             ))}
           </select>
         </div>
@@ -210,8 +221,7 @@ export default function Home() {
         </div>
 
         <p style={{ marginTop: "1rem" }}>
-          Your wallet:{" "}
-          {connectionStatus === "connected" ? address : "Not connected"}
+          Your wallet: {connectionStatus === "connected" ? address : "Not connected"}
         </p>
       </div>
     </main>
