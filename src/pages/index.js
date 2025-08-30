@@ -13,6 +13,8 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [sparkles, setSparkles] = useState([]);
 
+  const isDev = process.env.NODE_ENV === "development";
+
   useEffect(() => {
     const generated = [...Array(65)].map(() => ({
       top: `${Math.random() * 100}%`,
@@ -53,7 +55,7 @@ export default function Home() {
       }
     } catch (err) {
       console.error(err);
-      alert("Transaction failed: " + err.message);
+      alert("Transaction failed: " + (err as any).message);
     }
 
     setLoading(false);
@@ -90,7 +92,14 @@ export default function Home() {
         </div>
 
         {/* TOP NAV BUTTONS */}
-        <div style={{ display: "flex", gap: "10px", justifyContent: "center", marginBottom: "1rem" }}>
+        <div
+          style={{
+            display: "flex",
+            gap: "10px",
+            justifyContent: "center",
+            marginBottom: "1rem",
+          }}
+        >
           <a
             href="/my_ballrz"
             style={{
@@ -107,24 +116,45 @@ export default function Home() {
             🏀 My Balln Ballrz
           </a>
 
-          {/* 🔶 NEW: Go to Staking */}
-          <a
-            href="/ballrz-staking"
-            style={{
-              display: "inline-block",
-              padding: "0.6rem 1.2rem",
-              backgroundColor: "#f97316", // orange
-              color: "#000",
-              fontWeight: "bold",
-              borderRadius: "8px",
-              textDecoration: "none",
-              fontSize: "1.05rem",
-              border: "2px solid #fb923c",
-              boxShadow: "0 0 10px rgba(249,115,22,0.4)",
-            }}
-          >
-            🔶 Staking
-          </a>
+          {/* Staking: clickable in dev, disabled in prod */}
+          {isDev ? (
+            <a
+              href="/ballrz-staking"
+              style={{
+                display: "inline-block",
+                padding: "0.6rem 1.2rem",
+                backgroundColor: "#f97316",
+                color: "#000",
+                fontWeight: "bold",
+                borderRadius: "8px",
+                textDecoration: "none",
+                fontSize: "1.05rem",
+                border: "2px solid #fb923c",
+                boxShadow: "0 0 10px rgba(249,115,22,0.4)",
+              }}
+            >
+              🔶 Staking
+            </a>
+          ) : (
+            <button
+              disabled
+              title="Not yet live — stay tuned!"
+              style={{
+                display: "inline-block",
+                padding: "0.6rem 1.2rem",
+                backgroundColor: "#3f3f46",
+                color: "#a1a1aa",
+                fontWeight: "bold",
+                borderRadius: "8px",
+                textDecoration: "none",
+                fontSize: "1.05rem",
+                border: "2px solid #52525b",
+                cursor: "not-allowed",
+              }}
+            >
+              🔒 Staking (Coming Soon)
+            </button>
+          )}
         </div>
 
         <h1 style={{ fontSize: "1.75rem", margin: "1.5rem 0" }}>
@@ -172,7 +202,9 @@ export default function Home() {
           <label>Quantity: </label>
           <select onChange={(e) => setQuantity(Number(e.target.value))}>
             {[1, 3, 5, 10].map((q) => (
-              <option key={q} value={q}>{q}</option>
+              <option key={q} value={q}>
+                {q}
+              </option>
             ))}
           </select>
         </div>
@@ -221,7 +253,8 @@ export default function Home() {
         </div>
 
         <p style={{ marginTop: "1rem" }}>
-          Your wallet: {connectionStatus === "connected" ? address : "Not connected"}
+          Your wallet:{" "}
+          {connectionStatus === "connected" ? address : "Not connected"}
         </p>
       </div>
     </main>
