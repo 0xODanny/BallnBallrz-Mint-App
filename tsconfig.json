@@ -18,8 +18,8 @@
       "@/*": ["./src/*"],
       "@public/*": ["./public/*"]
     },
-    "types": ["node"]            // ⬅ add this line
+    "types": ["node"]
   },
   "include": ["next-env.d.ts", "src/**/*.ts", "src/**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules", "scripts/**/*"]   // ⬅ add scripts exclude
+  "exclude": ["node_modules", "scripts/**/*"]
 }

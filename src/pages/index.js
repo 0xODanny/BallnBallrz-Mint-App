@@ -55,7 +55,8 @@ export default function Home() {
       }
     } catch (err) {
       console.error(err);
-      alert("Transaction failed: " + (err as any).message);
+      const message = err instanceof Error ? err.message : String(err);
+      alert("Transaction failed: " + message);
     }
 
     setLoading(false);
