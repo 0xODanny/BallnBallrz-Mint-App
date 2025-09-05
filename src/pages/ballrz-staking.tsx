@@ -38,7 +38,6 @@ export default function BallrzStaking() {
       setCheckingEnroll(true);
       try {
         const r = await fetch(`/api/balln/points?wallet=${address}`);
-        // Treat 2xx as enrolled; 404 as not enrolled; other errors ignored
         if (!ignore) setEnrolled(r.ok);
         if (r.ok) {
           const j = await r.json().catch(() => ({}));
@@ -47,12 +46,13 @@ export default function BallrzStaking() {
           if (!ignore) setPoints(0);
         }
       } catch {
-        // leave enrolled as-is
       } finally {
         if (!ignore) setCheckingEnroll(false);
       }
     })();
-    return () => { ignore = true; };
+    return () => {
+      ignore = true;
+    };
   }, [address]);
 
   // --- poll points ONLY if enrolled
@@ -62,17 +62,20 @@ export default function BallrzStaking() {
     const load = async () => {
       try {
         const r = await fetch(`/api/balln/points?wallet=${address}`);
-        if (!r.ok) return; // if somehow unenrolled, skip
+        if (!r.ok) return;
         const j = await r.json();
         if (!stop) setPoints(Number(j.points || 0));
       } catch {}
     };
     load();
     const t = setInterval(load, 15000);
-    return () => { stop = true; clearInterval(t); };
+    return () => {
+      stop = true;
+      clearInterval(t);
+    };
   }, [address, enrolled]);
 
-  // --- onchain balances (independent of enrollment)
+  // --- onchain balances
   useEffect(() => {
     if (!address || !RPC) return;
     const provider = new ethers.providers.JsonRpcProvider(RPC);
@@ -100,7 +103,7 @@ export default function BallrzStaking() {
   const daysToRedeem = useMemo(() => (perDay > 0 ? REDEEM_POINTS / perDay : Infinity), [perDay]);
   const pct = Math.min(1, points / REDEEM_POINTS);
 
-  // --- register action
+  // --- register
   const register = async () => {
     if (!address) return alert("Connect your wallet first.");
     try {
@@ -120,15 +123,17 @@ export default function BallrzStaking() {
     }
   };
 
-  // --- redeem action (unchanged except for gating by 'enrolled')
+  // --- redeem
   async function fetchNftImage(tokenId: string) {
     try {
       const res1 = await fetch(`/api/balln/tokenURI?tokenId=${tokenId}`);
       const { tokenUri } = await res1.json();
       const httpUri = String(tokenUri || "").replace(/^ipfs:\/\//, "https://ipfs.io/ipfs/");
-      const meta = await fetch(httpUri).then(r => r.json());
+      const meta = await fetch(httpUri).then((r) => r.json());
       return String(meta.image || "").replace(/^ipfs:\/\//, "https://ipfs.io/ipfs/");
-    } catch { return ""; }
+    } catch {
+      return "";
+    }
   }
 
   const redeem = async () => {
@@ -144,15 +149,14 @@ export default function BallrzStaking() {
       const j = await r.json();
       if (!j.ok) throw new Error(j.error || "Redeem failed");
 
-      await new Promise(res => setTimeout(res, 3000)); // small IPFS delay
-
+      await new Promise((res) => setTimeout(res, 3000));
       let imageUrl = "";
       if (j.tokenId) imageUrl = await fetchNftImage(String(j.tokenId));
 
       alert(`🎉 Welcome to Ballrz! Tx: ${j.txHash}${j.tokenId ? ` (Token #${j.tokenId})` : ""}`);
       if (imageUrl) window.open(imageUrl, "_blank");
 
-      setPoints(p => Math.max(0, p - REDEEM_POINTS));
+      setPoints((p) => Math.max(0, p - REDEEM_POINTS));
     } catch (e: any) {
       alert(e?.message || "Redeem failed");
     } finally {
@@ -162,27 +166,104 @@ export default function BallrzStaking() {
 
   return (
     <>
-      {/* inline CSS from your current file retained … */}
+      {/* ✅ Retro inline theme */}
+      <style jsx global>{`
+        @import url("https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap");
+        :root {
+          --retro-font: "VT323", "Share Tech Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+        }
+        html,
+        body {
+          background: #000;
+          color: #e5e7eb;
+        }
+        .retro {
+          font-family: var(--retro-font);
+        }
+        .accent {
+          color: #f97316;
+        }
+        .muted {
+          color: #fbedd4;
+        }
+        @keyframes marquee {
+          0% {
+            transform: translateX(0);
+          }
+          100% {
+            transform: translateX(-50%);
+          }
+        }
+        .marquee-track {
+          white-space: nowrap;
+          padding-left: 100%;
+          animation: marquee var(--marquee-speed, 20s) linear infinite;
+        }
+        @keyframes ballX {
+          0% {
+            transform: translateX(0);
+          }
+          50% {
+            transform: translateX(calc(100vw - 80px));
+          }
+          100% {
+            transform: translateX(0);
+          }
+        }
+        .ball-bounce {
+          animation: ballX 6.4s ease-in-out infinite;
+        }
+        .stripes {
+          background-image: repeating-linear-gradient(
+            45deg,
+            rgba(0, 0, 0, 0.15) 0,
+            rgba(0, 0, 0, 0.15) 10px,
+            rgba(255, 255, 255, 0.12) 10px,
+            rgba(255, 255, 255, 0.12) 20px
+          );
+        }
+        .pad {
+          padding: 24px;
+        }
+        .gap8 > * + * {
+          margin-top: 8px;
+        }
+        .gap12 > * + * {
+          margin-top: 12px;
+        }
+        .gap16 > * + * {
+          margin-top: 16px;
+        }
+        .gap24 > * + * {
+          margin-top: 24px;
+        }
+        .rounded {
+          border-radius: 14px;
+        }
+        .card {
+          background: rgba(0, 0, 0, 0.6);
+          border: 1px solid rgba(234, 88, 12, 0.4);
+        }
+        .thin-border {
+          border: 1px solid rgba(148, 163, 184, 0.3);
+        }
+      `}</style>
 
       <div className="retro" style={{ minHeight: "100vh" }}>
-        {/* top banner omitted for brevity */}
-
-        {/* Ticker omitted for brevity */}
-
         {/* Header row */}
         <div className="pad" style={{ maxWidth: 1100, margin: "0 auto" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-            <a href="/" style={{ color: "#7dd3fc", textDecoration: "underline" }}>⬅ Back to Home</a>
+            <a href="/" style={{ color: "#7dd3fc", textDecoration: "underline" }}>
+              ⬅ Back to Home
+            </a>
 
             <h1 className="accent" style={{ fontSize: 40, fontWeight: 800, letterSpacing: 1, textAlign: "center", flex: 1 }}>
               Welcome to $BALLN Self-Custody Staking!
             </h1>
 
-            {/* ✅ Register / Registered button */}
+            {/* ✅ Wallet connect + Register */}
             <div style={{ display: "flex", gap: 8 }}>
-              {/* wallet connect stays */}
               <ConnectWallet />
-
               <button
                 onClick={register}
                 disabled={!address || enrolled || checkingEnroll}
@@ -196,27 +277,16 @@ export default function BallrzStaking() {
                   cursor: !address || enrolled || checkingEnroll ? "not-allowed" : "pointer",
                   boxShadow: enrolled ? "none" : "0 0 12px rgba(16,185,129,.35)",
                 }}
-                title={
-                  !address
-                    ? "Connect wallet"
-                    : enrolled
-                    ? "Already registered"
-                    : checkingEnroll
-                    ? "Checking…"
-                    : "Register wallet for tracking"
-                }
               >
                 {enrolled ? "Registered" : "Register Wallet for Tracking"}
               </button>
             </div>
           </div>
 
-          {/* Subtitle, metrics … unchanged */}
-
           {/* Status card */}
           <div className="card rounded pad gap12" style={{ marginTop: 28 }}>
             <h2 className="accent" style={{ fontSize: 24, marginBottom: 6 }}>
-              Staking Status {status === "connected" && address ? `for ${address.slice(0,6)}...${address.slice(-4)}` : ""}
+              Staking Status {status === "connected" && address ? `for ${address.slice(0, 6)}...${address.slice(-4)}` : ""}
             </h2>
 
             {!enrolled ? (
@@ -262,10 +332,7 @@ export default function BallrzStaking() {
                     fontWeight: 700,
                     color: points >= REDEEM_POINTS && status === "connected" && enrolled ? "#000" : "#cbd5e1",
                     background: points >= REDEEM_POINTS && status === "connected" && enrolled ? "#f97316" : "#3f3f46",
-                    cursor:
-                      !enrolled || points < REDEEM_POINTS || redeeming || status !== "connected"
-                        ? "not-allowed"
-                        : "pointer",
+                    cursor: !enrolled || points < REDEEM_POINTS || redeeming || status !== "connected" ? "not-allowed" : "pointer",
                   }}
                 >
                   {redeeming ? "Redeeming..." : "Redeem NFT"}
@@ -294,6 +361,7 @@ function Metric({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+
 function Line({ label, value, ok }: { label: string; value: string; ok?: boolean }) {
   return (
     <div>
