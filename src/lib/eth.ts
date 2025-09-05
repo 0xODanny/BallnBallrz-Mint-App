@@ -1,6 +1,6 @@
 // src/lib/eth.ts (ethers v5)
 import { ethers } from "ethers";
-import ballrzAbi from "@/abi/ballrz.json"; // ensure adminMint & tokenURI are present
+import ballrzAbi from "../../abi/ballrz.json"; // ensure adminMint & tokenURI are present
 
 export const RPC = process.env.AVAX_RPC!;
 export const BALLRZ = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS!;
