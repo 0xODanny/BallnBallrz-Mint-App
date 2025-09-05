@@ -15,6 +15,20 @@ const RPC = process.env.NEXT_PUBLIC_AVAX_RPC!;
 const BALLN = "0x4Afc7838167b77530278483c3d8c1fFe698a912E";
 const BALLRZ = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS!;
 
+async function fetchNftImage(tokenId: string) {
+  try {
+    const res1 = await fetch(`/api/balln/tokenURI?tokenId=${tokenId}`);
+    const { tokenUri } = await res1.json(); // e.g. ipfs://Qm.../123.json
+    if (!tokenUri) return "";
+    const httpUri = tokenUri.replace(/^ipfs:\/\//, "https://ipfs.io/ipfs/");
+    const meta = await fetch(httpUri).then(r => r.json());
+    const image = String(meta.image || "").replace(/^ipfs:\/\//, "https://ipfs.io/ipfs/");
+    return image;
+  } catch {
+    return "";
+  }
+}
+
 export default function BallrzStaking() {
   const address = useAddress();
   const status = useConnectionStatus();
@@ -91,12 +105,25 @@ export default function BallrzStaking() {
         body: JSON.stringify({ wallet: address }),
       });
       const j = await r.json();
-      if (j.ok) {
-        alert(`Minted! Tx: ${j.txHash}`);
-        setPoints((p) => Math.max(0, p - REDEEM_POINTS));
-      } else {
-        alert(j.error || "Redeem failed");
+      if (!j.ok) throw new Error(j.error || "Redeem failed");
+
+      // give IPFS a moment to pin/propagate
+      await new Promise(res => setTimeout(res, 3000));
+
+      let imageUrl = "";
+      if (j.tokenId) {
+        imageUrl = await fetchNftImage(String(j.tokenId));
       }
+
+      alert(`🎉 Welcome to Ballrz! Tx: ${j.txHash}${j.tokenId ? ` (Token #${j.tokenId})` : ""}`);
+
+      if (imageUrl) {
+        // simplest preview: open in a new tab; you could also render a modal
+        window.open(imageUrl, "_blank");
+      }
+
+      // reflect deduction locally
+      setPoints(p => Math.max(0, p - REDEEM_POINTS));
     } catch (e: any) {
       alert(e?.message || "Redeem failed");
     } finally {
