@@ -13,8 +13,6 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [sparkles, setSparkles] = useState([]);
 
-  const isDev = process.env.NODE_ENV === "development";
-
   useEffect(() => {
     const generated = [...Array(65)].map(() => ({
       top: `${Math.random() * 100}%`,
@@ -93,70 +91,49 @@ export default function Home() {
         </div>
 
         {/* TOP NAV BUTTONS */}
-        <div
-          style={{
-            display: "flex",
-            gap: "10px",
-            justifyContent: "center",
-            marginBottom: "1rem",
-          }}
-        >
-          <a
-            href="/my_ballrz"
-            style={{
-              display: "inline-block",
-              padding: "0.6rem 1.2rem",
-              backgroundColor: "#ffde59",
-              color: "#000",
-              fontWeight: "bold",
-              borderRadius: "8px",
-              textDecoration: "none",
-              fontSize: "1.05rem",
-            }}
-          >
-            🏀 My Balln Ballrz
-          </a>
+<div
+  style={{
+    display: "flex",
+    gap: "10px",
+    justifyContent: "center",
+    marginBottom: "1rem",
+  }}
+>
+  <a
+    href="/my_ballrz"
+    style={{
+      display: "inline-block",
+      padding: "0.6rem 1.2rem",
+      backgroundColor: "#ffde59",
+      color: "#000",
+      fontWeight: "bold",
+      borderRadius: "8px",
+      textDecoration: "none",
+      fontSize: "1.05rem",
+    }}
+  >
+    🏀 My Balln Ballrz
+  </a>
 
-          {/* Staking: clickable in dev, disabled in prod */}
-          {isDev ? (
-            <a
-              href="/ballrz-staking"
-              style={{
-                display: "inline-block",
-                padding: "0.6rem 1.2rem",
-                backgroundColor: "#f97316",
-                color: "#000",
-                fontWeight: "bold",
-                borderRadius: "8px",
-                textDecoration: "none",
-                fontSize: "1.05rem",
-                border: "2px solid #fb923c",
-                boxShadow: "0 0 10px rgba(249,115,22,0.4)",
-              }}
-            >
-              🔶 Staking
-            </a>
-          ) : (
-            <button
-              disabled
-              title="Not yet live — stay tuned!"
-              style={{
-                display: "inline-block",
-                padding: "0.6rem 1.2rem",
-                backgroundColor: "#3f3f46",
-                color: "#a1a1aa",
-                fontWeight: "bold",
-                borderRadius: "8px",
-                textDecoration: "none",
-                fontSize: "1.05rem",
-                border: "2px solid #52525b",
-                cursor: "not-allowed",
-              }}
-            >
-              🔒 Staking (Coming Soon)
-            </button>
-          )}
-        </div>
+  {/* ✅ Staking is live */}
+  <a
+    href="/ballrz-staking"
+    style={{
+      display: "inline-block",
+      padding: "0.6rem 1.2rem",
+      backgroundColor: "#f97316",
+      color: "#000",
+      fontWeight: "bold",
+      borderRadius: "8px",
+      textDecoration: "none",
+      fontSize: "1.05rem",
+      border: "2px solid #fb923c",
+      boxShadow: "0 0 10px rgba(249,115,22,0.4)",
+    }}
+  >
+    🔶 Staking
+  </a>
+</div>
 
         <h1 style={{ fontSize: "1.75rem", margin: "1.5rem 0" }}>
           🏀 Mint a Balln Ballrz NFT
