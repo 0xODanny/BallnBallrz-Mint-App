@@ -27,7 +27,7 @@ export default function BallrzStaking() {
   const [points, setPoints] = useState(0);
   const [redeeming, setRedeeming] = useState(false);
 
-  // --- check enrollment whenever wallet changes
+  // ───────────────── enrollment state ─────────────────
   useEffect(() => {
     let ignore = false;
     (async () => {
@@ -46,6 +46,7 @@ export default function BallrzStaking() {
           if (!ignore) setPoints(0);
         }
       } catch {
+        /* noop */
       } finally {
         if (!ignore) setCheckingEnroll(false);
       }
@@ -55,7 +56,7 @@ export default function BallrzStaking() {
     };
   }, [address]);
 
-  // --- poll points ONLY if enrolled
+  // ───────────────── poll points when enrolled ─────────────────
   useEffect(() => {
     if (!address || !enrolled) return;
     let stop = false;
@@ -68,14 +69,14 @@ export default function BallrzStaking() {
       } catch {}
     };
     load();
-    const t = setInterval(load, 15000);
+    const t = setInterval(load, 15_000);
     return () => {
       stop = true;
       clearInterval(t);
     };
   }, [address, enrolled]);
 
-  // --- onchain balances
+  // ───────────────── onchain balances ─────────────────
   useEffect(() => {
     if (!address || !RPC) return;
     const provider = new ethers.providers.JsonRpcProvider(RPC);
@@ -96,14 +97,14 @@ export default function BallrzStaking() {
     })();
   }, [address]);
 
-  // --- derived stats
-  const speed = useMemo(() => tokenSpeedFactor(bal), [bal]);
+  // ───────────────── derived stats ─────────────────
+  const speed = useMemo(() => tokenSpeedFactor(bal), [bal]); // not shown, but kept
   const boost = useMemo(() => boostFromNfts(nfts), [nfts]);
   const perDay = useMemo(() => dailyPoints(bal, nfts), [bal, nfts]);
   const daysToRedeem = useMemo(() => (perDay > 0 ? REDEEM_POINTS / perDay : Infinity), [perDay]);
   const pct = Math.min(1, points / REDEEM_POINTS);
 
-  // --- register
+  // ───────────────── actions ─────────────────
   const register = async () => {
     if (!address) return alert("Connect your wallet first.");
     try {
@@ -123,7 +124,6 @@ export default function BallrzStaking() {
     }
   };
 
-  // --- redeem
   async function fetchNftImage(tokenId: string) {
     try {
       const res1 = await fetch(`/api/balln/tokenURI?tokenId=${tokenId}`);
@@ -149,7 +149,9 @@ export default function BallrzStaking() {
       const j = await r.json();
       if (!j.ok) throw new Error(j.error || "Redeem failed");
 
+      // IPFS can lag slightly
       await new Promise((res) => setTimeout(res, 3000));
+
       let imageUrl = "";
       if (j.tokenId) imageUrl = await fetchNftImage(String(j.tokenId));
 
@@ -166,39 +168,27 @@ export default function BallrzStaking() {
 
   return (
     <>
-      {/* ✅ Retro inline theme */}
+      {/* Inline retro theming + marquee + cursor */}
       <style jsx global>{`
         @import url("https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap");
         :root {
-          --retro-font: "VT323", "Share Tech Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+          --retro-font: "VT323", "Share Tech Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+            "Liberation Mono", monospace;
         }
         html,
         body {
           background: #000;
-          color: #e5e7eb;
+          color: #fbedd4;
         }
         .retro {
           font-family: var(--retro-font);
+          letter-spacing: 0.3px;
         }
         .accent {
           color: #f97316;
         }
-        .muted {
-          color: #fbedd4;
-        }
-        @keyframes marquee {
-          0% {
-            transform: translateX(0);
-          }
-          100% {
-            transform: translateX(-50%);
-          }
-        }
-        .marquee-track {
-          white-space: nowrap;
-          padding-left: 100%;
-          animation: marquee var(--marquee-speed, 20s) linear infinite;
-        }
+
+        /* Bouncing ball (kept for header icon if you re-add it) */
         @keyframes ballX {
           0% {
             transform: translateX(0);
@@ -213,6 +203,37 @@ export default function BallrzStaking() {
         .ball-bounce {
           animation: ballX 6.4s ease-in-out infinite;
         }
+
+        /* Seamless marquee: two groups = continuous loop */
+        .ticker {
+          overflow: hidden;
+          border-top: 1px solid rgba(234, 88, 12, 0.35);
+          border-bottom: 1px solid rgba(234, 88, 12, 0.35);
+          background: #000;
+        }
+        .ticker-rail {
+          display: flex;
+          width: max-content;
+          animation: marquee var(--marquee-speed, 18s) linear infinite;
+          will-change: transform;
+        }
+        .ticker-group {
+          display: inline-flex;
+          white-space: nowrap;
+          gap: 2rem;
+          padding: 6px 2rem;
+          color: rgba(255, 166, 122, 0.9);
+        }
+        @keyframes marquee {
+          0% {
+            transform: translateX(0);
+          }
+          100% {
+            transform: translateX(-50%);
+          } /* move by exactly one group's width (because we render two) */
+        }
+
+        /* Progress stripes */
         .stripes {
           background-image: repeating-linear-gradient(
             45deg,
@@ -222,47 +243,72 @@ export default function BallrzStaking() {
             rgba(255, 255, 255, 0.12) 20px
           );
         }
-        .pad {
-          padding: 24px;
+
+        /* Blinking terminal cursor */
+        .cursor {
+          display: inline-block;
+          width: 10px;
+          height: 1.1em;
+          vertical-align: -0.2em;
+          background: #22c55e; /* green */
+          margin-left: 6px;
+          animation: blink 1s steps(1, end) infinite;
         }
-        .gap8 > * + * {
-          margin-top: 8px;
-        }
-        .gap12 > * + * {
-          margin-top: 12px;
-        }
-        .gap16 > * + * {
-          margin-top: 16px;
-        }
-        .gap24 > * + * {
-          margin-top: 24px;
-        }
-        .rounded {
-          border-radius: 14px;
-        }
-        .card {
-          background: rgba(0, 0, 0, 0.6);
-          border: 1px solid rgba(234, 88, 12, 0.4);
-        }
-        .thin-border {
-          border: 1px solid rgba(148, 163, 184, 0.3);
+        @keyframes blink {
+          0%,
+          50% {
+            opacity: 1;
+          }
+          50.01%,
+          100% {
+            opacity: 0;
+          }
         }
       `}</style>
 
       <div className="retro" style={{ minHeight: "100vh" }}>
-        {/* Header row */}
-        <div className="pad" style={{ maxWidth: 1100, margin: "0 auto" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        {/* ── Ticker (right → left, seamless) */}
+        <div className="ticker">
+          <div
+            className="ticker-rail"
+            style={
+              {
+                ["--marquee-speed" as any]: "16s", // ← adjust speed here (smaller = faster)
+              } as any
+            }
+          >
+            {/* group A */}
+            <div className="ticker-group">
+              <span>🏀 Hold $BALLN → earn points → redeem a Ballrz NFT!</span>
+              <span>Base {BASE_DAILY_POINTS.toFixed(1)}/day at cap</span>
+              <span>+0.5% per Ballrz up to +25%</span>
+              <span>Cap speed at {SPEED_CAP_TOKENS} $BALLN</span>
+              <span>Need {REDEEM_POINTS} points to mint</span>
+            </div>
+            {/* group B (duplicate for seamless loop) */}
+            <div className="ticker-group" aria-hidden>
+              <span>🏀 Hold $BALLN → earn points → redeem a Ballrz NFT!</span>
+              <span>Base {BASE_DAILY_POINTS.toFixed(1)}/day at cap</span>
+              <span>+0.5% per Ballrz up to +25%</span>
+              <span>Cap speed at {SPEED_CAP_TOKENS} $BALLN</span>
+              <span>Need {REDEEM_POINTS} points to mint</span>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Content (left-aligned, no borders) */}
+        <div style={{ maxWidth: 1100, marginLeft: 28, marginRight: 16, paddingTop: 18 }}>
+          {/* Top row: back, title, wallet/connect/register */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <a href="/" style={{ color: "#7dd3fc", textDecoration: "underline" }}>
               ⬅ Back to Home
             </a>
 
-            <h1 className="accent" style={{ fontSize: 40, fontWeight: 800, letterSpacing: 1, textAlign: "center", flex: 1 }}>
+            <h1 className="accent" style={{ fontSize: 40, fontWeight: 800, letterSpacing: 1, margin: "0 8px" }}>
               Welcome to $BALLN Self-Custody Staking!
             </h1>
 
-            {/* ✅ Wallet connect + Register */}
-            <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
               <ConnectWallet />
               <button
                 onClick={register}
@@ -277,35 +323,64 @@ export default function BallrzStaking() {
                   cursor: !address || enrolled || checkingEnroll ? "not-allowed" : "pointer",
                   boxShadow: enrolled ? "none" : "0 0 12px rgba(16,185,129,.35)",
                 }}
+                title={
+                  !address ? "Connect wallet" : enrolled ? "Already registered" : checkingEnroll ? "Checking…" : "Register wallet for tracking"
+                }
               >
                 {enrolled ? "Registered" : "Register Wallet for Tracking"}
               </button>
             </div>
           </div>
 
-          {/* Status card */}
-          <div className="card rounded pad gap12" style={{ marginTop: 28 }}>
-            <h2 className="accent" style={{ fontSize: 24, marginBottom: 6 }}>
+          {/* Subtitle */}
+          <p style={{ marginTop: 10, lineHeight: 1.45 }}>
+            Earn an NFT just by holding <span className="accent" style={{ fontWeight: 700 }}>$BALLN</span>. You need{" "}
+            <span className="accent" style={{ fontWeight: 700 }}>
+              {REDEEM_POINTS}
+            </span>{" "}
+            points for a Ballrz NFT. Base is{" "}
+            <span className="accent" style={{ fontWeight: 700 }}>
+              {BASE_DAILY_POINTS.toFixed(1)}
+            </span>{" "}
+            pts/day at cap ({SPEED_CAP_TOKENS} tokens). +0.5% per Ballrz (max +25%).
+          </p>
+
+          {/* Metrics row */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 16, marginTop: 16 }}>
+            <Metric label="Base/day @ cap" value={`${BASE_DAILY_POINTS.toFixed(2)} pts`} />
+            <Metric label="Your /day" value={`${perDay.toFixed(2)} pts`} />
+            <Metric label="Days to 3,333" value={isFinite(daysToRedeem) ? `${daysToRedeem.toFixed(1)} d` : "—"} />
+            <Metric label="NFT boost" value={`${((boost - 1) * 100).toFixed(1)}%`} />
+          </div>
+
+          {/* Status + progress (no box/border, left aligned) */}
+          <div style={{ marginTop: 24 }}>
+            <h2 className="accent" style={{ fontSize: 24, marginBottom: 8 }}>
               Staking Status {status === "connected" && address ? `for ${address.slice(0, 6)}...${address.slice(-4)}` : ""}
             </h2>
 
             {!enrolled ? (
-              <p className="muted" style={{ marginTop: 6 }}>
+              <p style={{ marginTop: 6 }}>
                 Connect your wallet and click <b>Register Wallet for Tracking</b> to start earning points.
               </p>
             ) : (
               <>
-                <div className="gap8" style={{ fontSize: 17, lineHeight: 1.5 }}>
+                <div style={{ fontSize: 17, lineHeight: 1.5 }}>
                   <Line label="Wallet status:" value={status === "connected" ? "✔ Wallet connected" : "✖ Not connected"} ok={status === "connected"} />
                   <Line label="$BALLN Balance:" value={bal.toFixed(4)} />
                   <Line label="Ballrz NFTs:" value={String(nfts)} />
-                  <Line label="Earning:" value={`${perDay.toFixed(2)} points/day (cap ${BASE_DAILY_POINTS.toFixed(1)}/day; +${((boost - 1) * 100).toFixed(1)}% from NFTs)`} />
+                  <Line
+                    label="Earning:"
+                    value={`${perDay.toFixed(2)} points/day (cap ${BASE_DAILY_POINTS.toFixed(1)}/day; +${((boost - 1) * 100).toFixed(
+                      1
+                    )}% from NFTs)`}
+                  />
                   <Line label="Time until NFT:" value={isFinite(daysToRedeem) ? `${daysToRedeem.toFixed(1)} days` : "—"} />
                 </div>
 
-                {/* Progress */}
-                <div style={{ marginTop: 16 }}>
-                  <div className="thin-border rounded" style={{ height: 22, overflow: "hidden", background: "rgba(71, 37, 14, 0.4)" }}>
+                {/* Progress bar (no border) */}
+                <div style={{ marginTop: 14 }}>
+                  <div style={{ height: 22, overflow: "hidden", background: "rgba(71, 37, 14, 0.4)", borderRadius: 12 }}>
                     <div
                       className="stripes"
                       style={{
@@ -316,7 +391,7 @@ export default function BallrzStaking() {
                       }}
                     />
                   </div>
-                  <div className="muted" style={{ marginTop: 6, fontSize: 14 }}>
+                  <div style={{ marginTop: 6, fontSize: 14 }}>
                     Progress toward next NFT — {points.toFixed(2)} / {REDEEM_POINTS}
                   </div>
                 </div>
@@ -332,7 +407,10 @@ export default function BallrzStaking() {
                     fontWeight: 700,
                     color: points >= REDEEM_POINTS && status === "connected" && enrolled ? "#000" : "#cbd5e1",
                     background: points >= REDEEM_POINTS && status === "connected" && enrolled ? "#f97316" : "#3f3f46",
-                    cursor: !enrolled || points < REDEEM_POINTS || redeeming || status !== "connected" ? "not-allowed" : "pointer",
+                    cursor:
+                      !enrolled || points < REDEEM_POINTS || redeeming || status !== "connected"
+                        ? "not-allowed"
+                        : "pointer",
                   }}
                 >
                   {redeeming ? "Redeeming..." : "Redeem NFT"}
@@ -340,10 +418,16 @@ export default function BallrzStaking() {
               </>
             )}
 
-            <p className="muted" style={{ marginTop: 18, fontSize: 12 }}>
+            {/* Footnote */}
+            <p style={{ marginTop: 18, fontSize: 12 }}>
               Once registered for staking, removal of $BALLN or Ballrz NFTs from this wallet will reset your earnings.
               Self-custody staking that allows earning another Ballrz by loyal $BALLN + NFT holders.
             </p>
+          </div>
+
+          {/* Terminal-style pulsing cursor footer */}
+          <div style={{ marginTop: 26, fontSize: 16, color: "#22c55e" }}>
+            READY<span className="cursor" />
           </div>
         </div>
       </div>
@@ -353,11 +437,11 @@ export default function BallrzStaking() {
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="card rounded pad" style={{ paddingTop: 12, paddingBottom: 12 }}>
+    <div>
       <div className="accent" style={{ fontSize: 12, letterSpacing: 2, textTransform: "uppercase", opacity: 0.9 }}>
         {label}
       </div>
-      <div className="muted" style={{ fontSize: 22, marginTop: 4 }}>{value}</div>
+      <div style={{ fontSize: 22, marginTop: 4 }}>{value}</div>
     </div>
   );
 }
@@ -365,7 +449,9 @@ function Metric({ label, value }: { label: string; value: string }) {
 function Line({ label, value, ok }: { label: string; value: string; ok?: boolean }) {
   return (
     <div>
-      <span className="accent" style={{ opacity: 0.9 }}>{label}</span>{" "}
+      <span className="accent" style={{ opacity: 0.9 }}>
+        {label}
+      </span>{" "}
       <span style={{ color: ok ? "#22c55e" : "#fbedd4" }}>{value}</span>
     </div>
   );
