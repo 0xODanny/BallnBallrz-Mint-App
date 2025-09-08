@@ -1,5 +1,5 @@
 // src/pages/ballrz-staking.tsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ConnectWallet, useAddress, useConnectionStatus } from "@thirdweb-dev/react";
 import { ethers } from "ethers";
 import {
@@ -24,15 +24,21 @@ export default function BallrzStaking() {
 
   const [bal, setBal] = useState(0);
   const [nfts, setNfts] = useState(0);
-  const [points, setPoints] = useState(0);
+
+  // server points (polled) vs displayed points (smoothly animated)
+  const [serverPoints, setServerPoints] = useState(0);
+  const [displayPoints, setDisplayPoints] = useState(0);
+
   const [redeeming, setRedeeming] = useState(false);
 
-  // ───────────────── enrollment state ─────────────────
+  // ───────────────── enrollment check ─────────────────
   useEffect(() => {
     let ignore = false;
     (async () => {
       if (!address) {
         setEnrolled(false);
+        setServerPoints(0);
+        setDisplayPoints(0);
         return;
       }
       setCheckingEnroll(true);
@@ -41,9 +47,16 @@ export default function BallrzStaking() {
         if (!ignore) setEnrolled(r.ok);
         if (r.ok) {
           const j = await r.json().catch(() => ({}));
-          if (typeof j.points === "number") setPoints(Number(j.points));
+          const pts = Number(j.points || 0);
+          if (!ignore) {
+            setServerPoints(pts);
+            setDisplayPoints(pts);
+          }
         } else if (r.status === 404) {
-          if (!ignore) setPoints(0);
+          if (!ignore) {
+            setServerPoints(0);
+            setDisplayPoints(0);
+          }
         }
       } catch {
         /* noop */
@@ -56,7 +69,7 @@ export default function BallrzStaking() {
     };
   }, [address]);
 
-  // ───────────────── poll points when enrolled ─────────────────
+  // ───────────────── poll points (server) ─────────────────
   useEffect(() => {
     if (!address || !enrolled) return;
     let stop = false;
@@ -65,7 +78,12 @@ export default function BallrzStaking() {
         const r = await fetch(`/api/balln/points?wallet=${address}`);
         if (!r.ok) return;
         const j = await r.json();
-        if (!stop) setPoints(Number(j.points || 0));
+        const pts = Number(j.points || 0);
+        if (!stop) {
+          setServerPoints(pts);
+          // snap display baseline to fresh server value
+          setDisplayPoints(pts);
+        }
       } catch {}
     };
     load();
@@ -98,11 +116,51 @@ export default function BallrzStaking() {
   }, [address]);
 
   // ───────────────── derived stats ─────────────────
-  const speed = useMemo(() => tokenSpeedFactor(bal), [bal]); // not shown, but kept
+  const speed = useMemo(() => tokenSpeedFactor(bal), [bal]); // not shown, but kept if you want to display later
   const boost = useMemo(() => boostFromNfts(nfts), [nfts]);
   const perDay = useMemo(() => dailyPoints(bal, nfts), [bal, nfts]);
+  const perSecond = perDay / 86400; // smooth client-side increment
   const daysToRedeem = useMemo(() => (perDay > 0 ? REDEEM_POINTS / perDay : Infinity), [perDay]);
-  const pct = Math.min(1, points / REDEEM_POINTS);
+
+  // ───────────────── smooth animator (client) ─────────────────
+  // We animate `displayPoints` between polls using perSecond, but clamp to serverPoints when it drops (e.g., reset).
+  const lastTickRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!enrolled) {
+      setDisplayPoints(serverPoints);
+      return;
+    }
+    let raf: number;
+
+    const tick = (ts: number) => {
+      if (lastTickRef.current == null) lastTickRef.current = ts;
+      const dt = (ts - lastTickRef.current) / 1000; // seconds
+      lastTickRef.current = ts;
+
+      setDisplayPoints((cur) => {
+        // If serverPoints is lower (reset), snap down
+        if (serverPoints < cur) return serverPoints;
+
+        // Only grow if earning
+        if (perSecond > 0) {
+          const next = cur + perSecond * dt;
+          // Never drift too far above serverPoints + small cushion (avoid visible jumps back)
+          const maxAhead = Math.max(5, perSecond * 30); // allow up to 30s ahead or 5 pts, whichever larger
+          return Math.min(next, serverPoints + maxAhead);
+        }
+        return serverPoints; // if perSecond <= 0, stick to server
+      });
+
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(raf);
+      lastTickRef.current = null;
+    };
+  }, [enrolled, perSecond, serverPoints]);
+
+  const pct = Math.min(1, Math.max(0, displayPoints / REDEEM_POINTS));
 
   // ───────────────── actions ─────────────────
   const register = async () => {
@@ -118,6 +176,9 @@ export default function BallrzStaking() {
         throw new Error(j.error || "Enroll failed");
       }
       setEnrolled(true);
+      // start from current server points (0 initially)
+      setServerPoints(0);
+      setDisplayPoints(0);
       alert("Wallet registered for staking. Tracking has started!");
     } catch (e: any) {
       alert(e?.message || "Enroll failed");
@@ -149,8 +210,7 @@ export default function BallrzStaking() {
       const j = await r.json();
       if (!j.ok) throw new Error(j.error || "Redeem failed");
 
-      // IPFS can lag slightly
-      await new Promise((res) => setTimeout(res, 3000));
+      await new Promise((res) => setTimeout(res, 3000)); // small IPFS delay
 
       let imageUrl = "";
       if (j.tokenId) imageUrl = await fetchNftImage(String(j.tokenId));
@@ -158,7 +218,9 @@ export default function BallrzStaking() {
       alert(`🎉 Welcome to Ballrz! Tx: ${j.txHash}${j.tokenId ? ` (Token #${j.tokenId})` : ""}`);
       if (imageUrl) window.open(imageUrl, "_blank");
 
-      setPoints((p) => Math.max(0, p - REDEEM_POINTS));
+      // locally reflect deduction immediately
+      setServerPoints((p) => Math.max(0, p - REDEEM_POINTS));
+      setDisplayPoints((p) => Math.max(0, p - REDEEM_POINTS));
     } catch (e: any) {
       alert(e?.message || "Redeem failed");
     } finally {
@@ -168,7 +230,7 @@ export default function BallrzStaking() {
 
   return (
     <>
-      {/* Inline retro theming + marquee + cursor */}
+      {/* Inline styles: marquee + stripes + cursor + retro */}
       <style jsx global>{`
         @import url("https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap");
         :root {
@@ -188,23 +250,7 @@ export default function BallrzStaking() {
           color: #f97316;
         }
 
-        /* Bouncing ball (kept for header icon if you re-add it) */
-        @keyframes ballX {
-          0% {
-            transform: translateX(0);
-          }
-          50% {
-            transform: translateX(calc(100vw - 80px));
-          }
-          100% {
-            transform: translateX(0);
-          }
-        }
-        .ball-bounce {
-          animation: ballX 6.4s ease-in-out infinite;
-        }
-
-        /* Seamless marquee: two groups = continuous loop */
+        /* Ticker */
         .ticker {
           overflow: hidden;
           border-top: 1px solid rgba(234, 88, 12, 0.35);
@@ -230,10 +276,10 @@ export default function BallrzStaking() {
           }
           100% {
             transform: translateX(-50%);
-          } /* move by exactly one group's width (because we render two) */
+          }
         }
 
-        /* Progress stripes */
+        /* Barber-pole progress stripes (animated) */
         .stripes {
           background-image: repeating-linear-gradient(
             45deg,
@@ -242,15 +288,25 @@ export default function BallrzStaking() {
             rgba(255, 255, 255, 0.12) 10px,
             rgba(255, 255, 255, 0.12) 20px
           );
+          background-size: 40px 40px;
+          animation: barber 0.8s linear infinite;
+        }
+        @keyframes barber {
+          from {
+            background-position: 0 0;
+          }
+          to {
+            background-position: 40px 0;
+          }
         }
 
-        /* Blinking terminal cursor */
+        /* Cursor */
         .cursor {
           display: inline-block;
           width: 10px;
           height: 1.1em;
           vertical-align: -0.2em;
-          background: #22c55e; /* green */
+          background: #22c55e;
           margin-left: 6px;
           animation: blink 1s steps(1, end) infinite;
         }
@@ -267,17 +323,17 @@ export default function BallrzStaking() {
       `}</style>
 
       <div className="retro" style={{ minHeight: "100vh" }}>
-        {/* ── Ticker (right → left, seamless) */}
+        {/* Ticker */}
         <div className="ticker">
           <div
             className="ticker-rail"
             style={
               {
-                ["--marquee-speed" as any]: "16s", // ← adjust speed here (smaller = faster)
+                ["--marquee-speed" as any]: "16s", // tweak speed here
               } as any
             }
           >
-            {/* group A */}
+            {/* A */}
             <div className="ticker-group">
               <span>🏀 Hold $BALLN → earn points → redeem a Ballrz NFT!</span>
               <span>Base {BASE_DAILY_POINTS.toFixed(1)}/day at cap</span>
@@ -285,7 +341,7 @@ export default function BallrzStaking() {
               <span>Cap speed at {SPEED_CAP_TOKENS} $BALLN</span>
               <span>Need {REDEEM_POINTS} points to mint</span>
             </div>
-            {/* group B (duplicate for seamless loop) */}
+            {/* B */}
             <div className="ticker-group" aria-hidden>
               <span>🏀 Hold $BALLN → earn points → redeem a Ballrz NFT!</span>
               <span>Base {BASE_DAILY_POINTS.toFixed(1)}/day at cap</span>
@@ -296,9 +352,8 @@ export default function BallrzStaking() {
           </div>
         </div>
 
-        {/* ── Content (left-aligned, no borders) */}
+        {/* Content (left-aligned) */}
         <div style={{ maxWidth: 1100, marginLeft: 28, marginRight: 16, paddingTop: 18 }}>
-          {/* Top row: back, title, wallet/connect/register */}
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <a href="/" style={{ color: "#7dd3fc", textDecoration: "underline" }}>
               ⬅ Back to Home
@@ -335,17 +390,11 @@ export default function BallrzStaking() {
           {/* Subtitle */}
           <p style={{ marginTop: 10, lineHeight: 1.45 }}>
             Earn an NFT just by holding <span className="accent" style={{ fontWeight: 700 }}>$BALLN</span>. You need{" "}
-            <span className="accent" style={{ fontWeight: 700 }}>
-              {REDEEM_POINTS}
-            </span>{" "}
-            points for a Ballrz NFT. Base is{" "}
-            <span className="accent" style={{ fontWeight: 700 }}>
-              {BASE_DAILY_POINTS.toFixed(1)}
-            </span>{" "}
-            pts/day at cap ({SPEED_CAP_TOKENS} tokens). +0.5% per Ballrz (max +25%).
+            <span className="accent" style={{ fontWeight: 700 }}>{REDEEM_POINTS}</span> points for a Ballrz NFT. Base is{" "}
+            <span className="accent" style={{ fontWeight: 700 }}>{BASE_DAILY_POINTS.toFixed(1)}</span> pts/day at cap ({SPEED_CAP_TOKENS} tokens). +0.5% per Ballrz (max +25%).
           </p>
 
-          {/* Metrics row */}
+          {/* Metrics */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 16, marginTop: 16 }}>
             <Metric label="Base/day @ cap" value={`${BASE_DAILY_POINTS.toFixed(2)} pts`} />
             <Metric label="Your /day" value={`${perDay.toFixed(2)} pts`} />
@@ -353,7 +402,7 @@ export default function BallrzStaking() {
             <Metric label="NFT boost" value={`${((boost - 1) * 100).toFixed(1)}%`} />
           </div>
 
-          {/* Status + progress (no box/border, left aligned) */}
+          {/* Status + progress */}
           <div style={{ marginTop: 24 }}>
             <h2 className="accent" style={{ fontSize: 24, marginBottom: 8 }}>
               Staking Status {status === "connected" && address ? `for ${address.slice(0, 6)}...${address.slice(-4)}` : ""}
@@ -371,44 +420,42 @@ export default function BallrzStaking() {
                   <Line label="Ballrz NFTs:" value={String(nfts)} />
                   <Line
                     label="Earning:"
-                    value={`${perDay.toFixed(2)} points/day (cap ${BASE_DAILY_POINTS.toFixed(1)}/day; +${((boost - 1) * 100).toFixed(
-                      1
-                    )}% from NFTs)`}
+                    value={`${perDay.toFixed(2)} points/day (cap ${BASE_DAILY_POINTS.toFixed(1)}/day; +${((boost - 1) * 100).toFixed(1)}% from NFTs)`}
                   />
                   <Line label="Time until NFT:" value={isFinite(daysToRedeem) ? `${daysToRedeem.toFixed(1)} days` : "—"} />
                 </div>
 
-                {/* Progress bar (no border) */}
+                {/* Progress */}
                 <div style={{ marginTop: 14 }}>
                   <div style={{ height: 22, overflow: "hidden", background: "rgba(71, 37, 14, 0.4)", borderRadius: 12 }}>
                     <div
                       className="stripes"
                       style={{
                         height: "100%",
-                        width: `${pct * 100}%`,
+                        width: `${Math.max(0, Math.min(100, pct * 100))}%`,
                         background: "#f97316",
-                        transition: "width .7s ease-out",
+                        transition: "width .35s linear", // still smooth when server updates land
                       }}
                     />
                   </div>
                   <div style={{ marginTop: 6, fontSize: 14 }}>
-                    Progress toward next NFT — {points.toFixed(2)} / {REDEEM_POINTS}
+                    Progress toward next NFT — {displayPoints.toFixed(2)} / {REDEEM_POINTS}
                   </div>
                 </div>
 
                 {/* Redeem */}
                 <button
                   onClick={redeem}
-                  disabled={!enrolled || points < REDEEM_POINTS || redeeming || status !== "connected"}
+                  disabled={!enrolled || displayPoints < REDEEM_POINTS || redeeming || status !== "connected"}
                   style={{
                     marginTop: 16,
                     padding: "10px 16px",
                     borderRadius: 10,
                     fontWeight: 700,
-                    color: points >= REDEEM_POINTS && status === "connected" && enrolled ? "#000" : "#cbd5e1",
-                    background: points >= REDEEM_POINTS && status === "connected" && enrolled ? "#f97316" : "#3f3f46",
+                    color: displayPoints >= REDEEM_POINTS && status === "connected" && enrolled ? "#000" : "#cbd5e1",
+                    background: displayPoints >= REDEEM_POINTS && status === "connected" && enrolled ? "#f97316" : "#3f3f46",
                     cursor:
-                      !enrolled || points < REDEEM_POINTS || redeeming || status !== "connected"
+                      !enrolled || displayPoints < REDEEM_POINTS || redeeming || status !== "connected"
                         ? "not-allowed"
                         : "pointer",
                   }}
@@ -449,9 +496,7 @@ function Metric({ label, value }: { label: string; value: string }) {
 function Line({ label, value, ok }: { label: string; value: string; ok?: boolean }) {
   return (
     <div>
-      <span className="accent" style={{ opacity: 0.9 }}>
-        {label}
-      </span>{" "}
+      <span className="accent" style={{ opacity: 0.9 }}>{label}</span>{" "}
       <span style={{ color: ok ? "#22c55e" : "#fbedd4" }}>{value}</span>
     </div>
   );
