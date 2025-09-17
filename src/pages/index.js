@@ -213,7 +213,7 @@ if (code && code !== "0x") {
 </div>
 
         <h1 style={{ fontSize: "1.75rem", margin: "1.5rem 0" }}>
-          🏀 Mint a Balln Ballrz NFT
+          🏀 Mint your Balln Ballrz NFT
         </h1>
 
         <div
