@@ -51,32 +51,58 @@ const handleMint = async () => {
     // 1) ask permission
     await provider.send("eth_requestAccounts", []);
 
-    // 2) ensure Avalanche C-Chain (43114)
-    const net = await provider.getNetwork();
-    if (Number(net.chainId) !== 43114) {
-      await provider.send("wallet_switchEthereumChain", [{ chainId: "0xa86a" }]);
+    // 2) ensure Avalanche C-Chain (43114) with add-chain fallback
+    try {
+      const net = await provider.getNetwork();
+      if (Number(net.chainId) !== 43114) {
+        await provider.send("wallet_switchEthereumChain", [{ chainId: "0xa86a" }]);
+      }
+    } catch (e) {
+      if (e?.code === 4902) {
+        await provider.send("wallet_addEthereumChain", [{
+          chainId: "0xa86a",
+          chainName: "Avalanche C-Chain",
+          nativeCurrency: { name: "AVAX", symbol: "AVAX", decimals: 18 },
+          rpcUrls: [process.env.NEXT_PUBLIC_AVAX_RPC || "https://api.avax.network/ext/bc/C/rpc"],
+          blockExplorerUrls: ["https://snowtrace.io/"],
+        }]);
+      } else {
+        throw e;
+      }
     }
 
     // 3) signer AFTER permission/network
     const signer = provider.getSigner();
+    const userAddress = await signer.getAddress();
 
-    // 4) send AVAX (no float math)
+    // 4) send AVAX (no float math) + balance guard
     const deployer = process.env.NEXT_PUBLIC_DEPLOYER_WALLET;
     if (!deployer) throw new Error("Missing NEXT_PUBLIC_DEPLOYER_WALLET");
-    const priceWei = ethers.utils.parseUnits("1.33", 18);
-    const valueWei = priceWei.mul(ethers.BigNumber.from(String(quantity)));
 
-    const payTx = await signer.sendTransaction({ to: deployer, value: valueWei });
+    const priceWei  = ethers.utils.parseUnits("1.33", 18);
+    const totalWei  = priceWei.mul(ethers.BigNumber.from(String(quantity)));
+
+    const balWei    = await provider.getBalance(userAddress);
+    const bufferWei = ethers.utils.parseUnits("0.005", 18); // ~gas buffer
+    if (balWei.lt(totalWei.add(bufferWei))) {
+      const need = Number(
+        ethers.utils.formatUnits(totalWei.add(bufferWei).sub(balWei), 18)
+      ).toFixed(4);
+      alert(`Not enough AVAX. You need ~${need} more AVAX (incl. gas).`);
+      setLoading(false);
+      return;
+    }
+
+    const payTx = await signer.sendTransaction({ to: deployer, value: totalWei });
     await payTx.wait();
 
     // 5) call backend to adminMint
     const r = await fetch("/api/mint", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ address, quantity, paymentMethod: "avax" }),
+      body: JSON.stringify({ address: userAddress, quantity, paymentMethod: "avax" }),
     });
 
-    // try to parse, otherwise show raw text
     let data;
     try { data = await r.json(); }
     catch {
@@ -88,7 +114,7 @@ const handleMint = async () => {
     window.location.href = `/success?tokenIds=${data.tokenIds.join(",")}`;
   } catch (err) {
     console.error("Mint error:", err);
-    alert("Transaction failed: " + explain(err));
+    alert("Transaction failed: " + (err?.message || String(err)));
   } finally {
     setLoading(false);
   }
