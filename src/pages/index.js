@@ -22,43 +22,77 @@ export default function Home() {
     setSparkles(generated);
   }, []);
 
-  const handleMint = async () => {
-    if (!address) return alert("Connect your wallet first.");
-    setLoading(true);
-
+  function explain(err) {
+  if (!err) return "Unknown error";
+  if (typeof err === "string") return err;
+  if (err?.reason) return err.reason;
+  if (err?.message) return err.message;
+  const data = err?.data || err?.error || err;
+  if (typeof data === "object") {
     try {
-      const { ethereum } = window;
-      const provider = new ethers.providers.Web3Provider(ethereum, "any");
-      await provider.send("eth_requestAccounts", []);
-      const signer = provider.getSigner();
-      const deployer = process.env.NEXT_PUBLIC_DEPLOYER_WALLET;
+      return JSON.stringify(
+        { code: data.code ?? err.code, message: data.message ?? err.message, reason: data.reason },
+        null,
+        2
+      );
+    } catch {}
+  }
+  return String(err);
+}
 
-      const tx = await signer.sendTransaction({
-        to: deployer,
-        value: ethers.utils.parseEther((1.33 * quantity).toFixed(4)),
-      });
-      await tx.wait();
+const handleMint = async () => {
+  if (!address) return alert("Connect your wallet first.");
+  setLoading(true);
+  try {
+    if (!window?.ethereum) throw new Error("No wallet found. Install MetaMask.");
 
-      const res = await fetch("/api/mint", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ address, quantity, paymentMethod: "avax" }),
-      });
+    const provider = new ethers.providers.Web3Provider(window.ethereum, "any");
 
-      const data = await res.json();
-      if (data.success) {
-        window.location.href = `/success?tokenIds=${data.tokenIds.join(",")}`;
-      } else {
-        alert("Mint failed: " + data.error);
-      }
-    } catch (err) {
-      console.error(err);
-      const message = err instanceof Error ? err.message : String(err);
-      alert("Transaction failed: " + message);
+    // 1) ask permission
+    await provider.send("eth_requestAccounts", []);
+
+    // 2) ensure Avalanche C-Chain (43114)
+    const net = await provider.getNetwork();
+    if (Number(net.chainId) !== 43114) {
+      await provider.send("wallet_switchEthereumChain", [{ chainId: "0xa86a" }]);
     }
 
+    // 3) signer AFTER permission/network
+    const signer = provider.getSigner();
+
+    // 4) send AVAX (no float math)
+    const deployer = process.env.NEXT_PUBLIC_DEPLOYER_WALLET;
+    if (!deployer) throw new Error("Missing NEXT_PUBLIC_DEPLOYER_WALLET");
+    const priceWei = ethers.utils.parseUnits("1.33", 18);
+    const valueWei = priceWei.mul(ethers.BigNumber.from(String(quantity)));
+
+    const payTx = await signer.sendTransaction({ to: deployer, value: valueWei });
+    await payTx.wait();
+
+    // 5) call backend to adminMint
+    const r = await fetch("/api/mint", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ address, quantity, paymentMethod: "avax" }),
+    });
+
+    // try to parse, otherwise show raw text
+    let data;
+    try { data = await r.json(); }
+    catch {
+      const text = await r.text();
+      throw new Error(`Server response not JSON: ${text.slice(0, 200)}`);
+    }
+
+    if (!data?.success) throw new Error(data?.error || "Server mint failed");
+    window.location.href = `/success?tokenIds=${data.tokenIds.join(",")}`;
+  } catch (err) {
+    console.error("Mint error:", err);
+    alert("Transaction failed: " + explain(err));
+  } finally {
     setLoading(false);
-  };
+  }
+};
 
   return (
     <main
