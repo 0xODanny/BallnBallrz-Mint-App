@@ -110,8 +110,26 @@ if (code && code !== "0x") {
   return;
 }
 
-    const payTx = await signer.sendTransaction({ to: deployer, value: totalWei });
-    await payTx.wait();
+// 3) Estimate gas before sending to catch "insufficient funds"
+try {
+  await signer.estimateGas({ to: deployer, value: totalWei });
+} catch (e) {
+  const msg = (e?.reason || e?.message || "").toLowerCase();
+  if (e?.code === "INSUFFICIENT_FUNDS" || msg.includes("insufficient funds")) {
+    const have  = Number(ethers.utils.formatUnits(balWei, 18)).toFixed(4);
+    const need  = Number(ethers.utils.formatUnits(totalWei.add(bufferWei), 18)).toFixed(4);
+    alert(`Not enough AVAX.\n\nYou have: ${have} AVAX\nNeed (incl. gas): ~${need} AVAX`);
+    setLoading(false);
+    return;
+  }
+  alert(`Cannot send payment: ${e?.reason || e?.message || e}`);
+  setLoading(false);
+  return;
+}
+
+// 4) Send the AVAX
+const payTx = await signer.sendTransaction({ to: deployer, value: totalWei });
+await payTx.wait();
 
     // 5) call backend to adminMint
     const r = await fetch("/api/mint", {
