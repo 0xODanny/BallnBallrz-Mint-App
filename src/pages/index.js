@@ -76,22 +76,39 @@ const handleMint = async () => {
     const userAddress = await signer.getAddress();
 
     // 4) send AVAX (no float math) + balance guard
-    const deployer = process.env.NEXT_PUBLIC_DEPLOYER_WALLET;
-    if (!deployer) throw new Error("Missing NEXT_PUBLIC_DEPLOYER_WALLET");
+const deployer = process.env.NEXT_PUBLIC_DEPLOYER_WALLET;
+if (!deployer) throw new Error("Missing NEXT_PUBLIC_DEPLOYER_WALLET");
 
-    const priceWei  = ethers.utils.parseUnits("1.33", 18);
-    const totalWei  = priceWei.mul(ethers.BigNumber.from(String(quantity)));
+const priceWei  = ethers.utils.parseUnits("1.33", 18);
+const totalWei  = priceWei.mul(ethers.BigNumber.from(String(quantity)));
 
-    const balWei    = await provider.getBalance(userAddress);
-    const bufferWei = ethers.utils.parseUnits("0.005", 18); // ~gas buffer
-    if (balWei.lt(totalWei.add(bufferWei))) {
-      const need = Number(
-        ethers.utils.formatUnits(totalWei.add(bufferWei).sub(balWei), 18)
-      ).toFixed(4);
-      alert(`Not enough AVAX. You need ~${need} more AVAX (incl. gas).`);
-      setLoading(false);
-      return;
-    }
+const balWei    = await provider.getBalance(userAddress);
+const bufferWei = ethers.utils.parseUnits("0.01", 18); // safer buffer (~0.01 AVAX)
+
+if (balWei.lt(totalWei.add(bufferWei))) {
+  const have  = Number(ethers.utils.formatUnits(balWei, 18)).toFixed(4);
+  const need  = Number(ethers.utils.formatUnits(totalWei.add(bufferWei), 18)).toFixed(4);
+  alert(
+    `Not enough AVAX.\n\nYou have: ${have} AVAX\nNeed (incl. gas): ~${need} AVAX`
+  );
+  setLoading(false);
+  return;
+}
+
+// Sanity: which address are we paying?
+console.log("Paying to:", deployer);
+
+// 1) Verify you have the expected balance
+console.log("totalWei:", totalWei.toString());
+console.log("balWei:", balWei.toString());
+
+// 2) Verify the payee is an EOA (no code). If it's a contract, value transfer may revert.
+const code = await provider.getCode(deployer);
+if (code && code !== "0x") {
+  alert("Payment address is a contract. Set NEXT_PUBLIC_DEPLOYER_WALLET to an EOA that can receive AVAX.");
+  setLoading(false);
+  return;
+}
 
     const payTx = await signer.sendTransaction({ to: deployer, value: totalWei });
     await payTx.wait();
