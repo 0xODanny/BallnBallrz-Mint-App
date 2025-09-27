@@ -268,7 +268,7 @@ await payTx.wait();
         </div>
 
         <p style={{ margin: "1rem 0" }}>
-          Each NFT costs <strong>0.67 AVAX</strong>
+          For a LIMITED TIME only each NFT costs <strong>0.67 AVAX</strong>
         </p>
 
         <div style={{ marginBottom: "1rem" }}>
